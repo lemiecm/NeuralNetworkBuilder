@@ -1,6 +1,7 @@
 
-from cProfile import label
 import random
+from re import S
+from termios import TAB1
 import numpy as np
 import matplotlib.pylab as plt
 
@@ -15,7 +16,7 @@ def tanh(z):
     return np.tanh(z)
 
 def tanh_derivative(activation):
-    return 1.0 - activation**2
+    return 1 - np.power(tanh(activation),2)
 
 def softmax(z):
 	expZ = np.exp(z - np.max(z))
@@ -30,14 +31,19 @@ class NeuralNetwork:
         self.nn_size = len(layers_sizes)
         self.losses = []
         self.momentum = momentum
+        
         # This way we get list of np arrays that will be helpful in math equations
         # for instance dot product from numpy
        
         self.weights = [np.random.randn(in_neurons,out_neurons)  * 0.1 for in_neurons,out_neurons in zip(layers_sizes[:-1], layers_sizes[1:])]
         self.biases = [np.random.randn(in_neurons, 1) * 0.1 for in_neurons in layers_sizes[1:]] 
        
-       # in literature also known as velocity will be needed later on 
-        self.previous_d_w = [np.zeros(w.shape) for w in self.weights]
+       # Nedded for momemntum
+        self.prev_dws = [np.zeros(w.shape) for w in self.weights]
+        self.prev_dbs = [np.zeros(b.shape) for b in self.biases]
+
+    #    # in literature also known as velocity will be needed later on 
+    #     self.previous_d_w = [np.zeros(w.shape) for w in self.weights]
 
     def __cross_entropy_loss(self,predicted, labeled):
         # 1e-7 - added to avoid having log(0)  
@@ -139,9 +145,6 @@ class NeuralNetwork:
     # input - x, input vector
     # y - label
     def __backprop(self, input, y):
-        # initialize changes of weights and biases in NN
-        # d_w = [np.zeros(w.shape) for w in self.weights]
-        # d_b = [np.zeros(b.shape) for b in self.biases]
         
         # forward pass
         output, cache = self.__feed_forward_pass(input)
@@ -162,6 +165,7 @@ class NeuralNetwork:
         for x, y in mini_batch:
             output, cache = self.__backprop(x, y)
             # 'inner' sum of weights and biases
+            
             d_B = [local_db + update_db for local_db, update_db in zip(d_B, cache["dbs"])]
             d_W = [local_dw + update_dw for local_dw, update_dw in zip(d_W, cache["dws"])]
 
@@ -173,63 +177,92 @@ class NeuralNetwork:
 
         batch_loss = sum(losses)/len(losses)
         res_accuracy = accuracy/len(list(mini_batch))
-
+       
         temp_W = []
-        # for (w, dw,prev_dw) in zip(self.weights, d_W, self.previous_d_w):
-        #     if batch_loss < 1.05 * self.losses[-1]:
-        #         temp_W.append(w-learning_rate/(1-self.momentum)*len(mini_batch)*prev_dw)
-        #     else:
-        for (w, dw) in zip(self.weights, d_W):
-            temp_W.append(w-learning_rate/len(mini_batch)*dw)
-            
-        self.weights = temp_W
-                      
         temp_b = []  
-        for (b, db) in zip(self.biases, d_B):
-            temp_b.append(b-learning_rate/len(mini_batch)*db)
+        if len(self.losses)!=0 and batch_loss < 1.05 * self.losses[-1]:
+            self.prev_dws = [self.momentum*prev_dw for prev_dw in self.prev_dws]
+            self.prev_dbs = [self.momentum*prev_db for prev_db in self.prev_dbs]
+            
+        else:
+            self.prev_dws = [np.zeros(w.shape) for w in self.weights]
+            self.prev_dbs = [np.zeros(b.shape) for b in self.biases]
+            
+        for (w,dw,momentum) in zip(self.weights, d_W, self.prev_dws):
+            temp_W.append(w-learning_rate/len(mini_batch)*dw + momentum)
 
+        for (b,db,momentum) in zip(self.biases, d_B, self.prev_dbs):
+            temp_b.append(b-learning_rate/len(mini_batch)*db + momentum)
+
+        self.weights = temp_W
         self.biases = temp_b
-        
-        
+
         return batch_outputs,batch_loss,res_accuracy
                        
     def train(self, training_data, epochs, batch_size, learning_rate, test_data=None):
-        training_data = list(training_data)
-        samples = len(training_data)
-
-        if test_data:
-            test_data = list(test_data)
-            n_test = len(test_data)
-
+        self.learing_rate = learning_rate
+        training_data = training_data
+        num_of_rows = len(training_data)
+        self.batch_size = batch_size
+        print("Started training \n")
         for k in range(epochs):
             # shuffling traing set before dividing to disjoint batches
             random.shuffle(training_data)
-            mini_batches = [training_data[i:i+batch_size] for i in range(0, samples, batch_size)]
+            mini_batches = [training_data[i:i+batch_size] for i in range(0, num_of_rows, batch_size)]
             batch_loss = [] 
             accuracies = []
             for mini_batch in mini_batches:
                 batch_output, loss, mini_accuracy = self.__mini_batch_train(mini_batch, learning_rate)
                 batch_loss.append(loss)
-                
-                # batch_y = [list(element) for element in zip(*mini_batch)][1]
-                # print(np.argmax(batch_output[0]))
-                # print(np.argmax(batch_y[0]))
-                # print()
-            
+
                 accuracies.append(mini_accuracy)
 
-            print(f"Epoch {k}: acc: {sum(accuracies)/len(accuracies)} \n")
-            # mean loss for one epoch
             e_loss = sum(batch_loss)/len(batch_loss)
+            print(f"Epoch {k}: acc: {sum(accuracies)/len(accuracies)} loss: {e_loss}\n")
+            # mean loss for one epoch
             self.losses.append(e_loss)
         
         self.__plot_loss()
+
+    def test(self, test_data,batch_size):
+        
+        num_of_rows = len(test_data)
+    
+        random.shuffle(test_data)
+        mini_batches = [test_data[i:i+batch_size] for i in range(0, num_of_rows, batch_size)]
+        batch_loss = [] 
+        accuracies = []
+        for mini_batch in mini_batches:
+            losses = []
+            accuracy = 0
+            for x,y in mini_batch:
+                output, cache = self.__feed_forward_pass(x)
+                accuracy = self.__accuracy(output,y) +  accuracy
+                loss = self.__cross_entropy_loss(output,y)
+                losses.append(loss)
+            batch_loss.append(sum(losses)/batch_size)
+            accuracies.append(accuracy/batch_size)
+        
+        
+        print(f"Test results: \nAcc: {np.mean(accuracies)} Loss: {np.mean(batch_loss)}\n")
+        self.__plot_test_loss(batch_loss)
+
+    def __plot_test_loss(self, losses):
+        plt.figure()
+        plt.plot(np.arange(len(losses)), losses)
+        plt.xlabel("Sample number")
+        plt.ylabel("Loss")
+        plt.title(f"Test ")
+        # plt.savefig(f'wine_momenum_{self.momentum}test.png')
+        plt.show()
 
     def __plot_loss(self):
         plt.figure()
         # length of loss = num of epochs
         plt.plot(np.arange(len(self.losses)), self.losses)
-        plt.xlabel("epochs")
-        plt.ylabel("loss")
+        plt.xlabel("Epochs")
+        plt.ylabel("Loss")
+        plt.title(f"Train")
+        # plt.savefig(f'wine_momenum_{self.momentum}train.png')
         plt.show()
     

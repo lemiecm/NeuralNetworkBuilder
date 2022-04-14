@@ -1,5 +1,5 @@
+
 from csv import reader
-from math import fabs
 import numpy as np
 import matplotlib.pylab as plt
 
@@ -35,27 +35,83 @@ from not_mine import *
 
 #     return train_zipped, test_zipped
 
-def spliting(dataset, num_of_input = 13, num_of_classes = 3, label_col = 0):
+def one_hot_part_2(y, num_of_classes):
+    encoded = np.zeros((num_of_classes, 1))
+    encoded[y-1-3] = 1.0
+    return encoded
+
+def one_hot_part_3(y, num_of_classes):
+    encoded = np.zeros((num_of_classes, 1))
+    res =  int(str({
+        'SEKER':0,
+        'BARBUNYA':1, 
+        'BOMBAY':2, 
+        'CALI':3, 
+        'DERMASON':4, 
+        'HOROZ':5,
+        'SIRA':6
+    }.get(y)))
+    encoded[res] = 1.0
+    return encoded
+
+def one_hot_part_4(y, num_of_classes):
+    encoded = np.zeros((num_of_classes, 1))
+    res =  int(str({
+        'Iris-setosa':0,
+        'Iris-versicolor':1, 
+        'Iris-virginica':2, 
+    }.get(y)))
+    encoded[res] = 1.0
+    return encoded
+    
+    
+def spliting(dataset, num_of_input = 13, num_of_classes = 3, label_col = 0, is_first_label = True,is_string_columns=False):
     random.shuffle(dataset)
     size_data = len(dataset)
+    
+    # Divide data in ration 0.2 0.8 
     train_len = int(size_data*0.8)
     train = dataset[:train_len]
     test = dataset[train_len:]
 
-    train_y = [item[label_col] for item in train]
-    train_y = [one_hot_encode(y,num_of_input) for y in train_y]
+    if(is_first_label):
+        train_y = [item[label_col] for item in train]
+        train_y = [one_hot_encode(y,num_of_classes) for y in train_y]
 
-    train_x = [item[:11] for item in train]
-    train_x = [np.reshape(x, (1,num_of_classes)) for x in train_x]
-    print(np.array(train_y).shape)
-    
-    test_x = [item[:11] for item in test]
-    test_x = [np.reshape(x, (1, num_of_input)) for x in test_x]
+        train_x = [item[label_col+1:] for item in train]
+        train_x = [np.reshape(x, (1, num_of_input)) for x in train_x]
 
-    test_y = [item[11] for item in test]
-    test_y = [one_hot_encode(y,num_of_classes) for y in test_y]
-    # test_y = [one_hot_encode(y,3) for y in test_y]
+        test_y = [item[label_col] for item in test]
+        test_y = [one_hot_encode(y,num_of_classes) for y in test_y]
 
+        test_x = [item[label_col+1:] for item in test]
+        test_x = [np.reshape(x, (1, num_of_input)) for x in test_x]
+
+    elif not is_string_columns:
+        train_y = [item[label_col] for item in train]
+        train_y = [one_hot_encode(y,num_of_classes) for y in train_y]
+
+        train_x = [item[:label_col] for item in train]
+        train_x = [np.reshape(x, (1, num_of_input)) for x in train_x]
+        
+        test_y = [item[label_col] for item in test]
+        test_y = [one_hot_encode(y,num_of_classes) for y in test_y]
+
+        test_x = [item[:label_col] for item in test]
+        test_x = [np.reshape(x, (1, num_of_input)) for x in test_x]
+
+    else:
+        train_y = [item[label_col] for item in train]
+        train_y = [one_hot_part_4(y,num_of_classes) for y in train_y]
+
+        train_x = [item[:label_col] for item in train]
+        train_x = [np.reshape(x, (1, num_of_input)) for x in train_x]
+        
+        test_y = [item[label_col] for item in test]
+        test_y = [one_hot_part_4(y,num_of_classes) for y in test_y]
+
+        test_x = [item[:label_col] for item in test]
+        test_x = [np.reshape(x, (1, num_of_input)) for x in test_x]
     train_zipped = zip(train_x, train_y)
     test_zipped = zip(test_x, test_y)
 
@@ -86,108 +142,90 @@ def load_csv(filename, columns_to_int, columns_to_float, is_header=False, is_csv
             dataset.append(row)
     return dataset
 
-# Calculate accuracy percentage
-def accuracy_metric(actual, predicted):
-    correct = 0
-    for i in range(len(actual)):
-        if actual[i] == predicted[i]:
-            correct += 1
-    return correct / float(len(actual)) * 100.0
+def test1(epochs=100,batch_size=16,lr=0.001,activation_function='tanh', momentum =0.9):
+    data = load_csv("./data/winequality-red.csv",[11],[*range(0,11,1)],is_header=True, is_csv =True)
 
-# def parse_txt(fname, num_features=13, num_targets=1):
+    train, test = spliting(data, num_of_input=11, num_of_classes=11,label_col=11, is_first_label =False)
+    nn = NeuralNetwork([11,20,16,11],activation_function, momentum)
+    nn.train(list(train),epochs,batch_size,lr)
+    nn.test(list(test),batch_size)
     
-#     '''
-#         Read data from a text file and generate arrays 
-#         ready to be fed into the network as inputs.
+def test2():
+    data = load_csv("./data/wine.data",[0,13],[*range(1,13,1)],is_header=False, is_csv =False)
 
-#         Each line in the text file is separated by a
-#         newline, and represents a data point.
-#         Features in a line are separated by blank space 
-#         and the last data point is the target.
+    train, test = spliting(data, num_of_input=13, num_of_classes=3,label_col=0, is_first_label =True)
+    nn = NeuralNetwork([13,20,10,3],activation_function='tanh')
+    nn.train(list(train),200,4,0.001)
 
-#     '''
+def test3():
+    data = load_csv("./data/Dry_Bean_Dataset.csv",[0,6],[1,2,3,4,5,7,8,9,10,11,12,13,14,15],is_header=True, is_csv =True)
 
-#     X = np.empty((178, num_features), dtype=float)
-#     Y = np.empty(178, dtype=int)
+    train, test = spliting(data, num_of_input=16, num_of_classes=7,label_col=16, is_first_label =False, is_string_columns=True)
+    nn = NeuralNetwork([16,20,10,7])
+    nn.train(list(train),100,64,0.001)
 
-#     with open(fname) as f:
-#         for index, line in enumerate(f):
-#             line = line.rstrip('\n')
-#             data = line.split(',')
+def test4():
+   
+    data = load_csv("./data/wheat-seeds.csv",[7],[*range(0,7,1)],is_header=False, is_csv =False)
 
+    train, test = spliting(data, num_of_input=7, num_of_classes=3,label_col=7, is_first_label =False)
+    nn = NeuralNetwork([7,20,10,3])
+    nn.train(list(train),100,8,0.002)
+    nn.test(list(test))
 
-#             X[index, :] = np.asarray(data[1:])
-#             Y[index] = np.asarray(data[0])
+def test5(epochs=100,batch_size=4,lr=0.01,activation_function='tanh', momentum=0.9):
+    data = load_csv("./data/iris.data",[],[*range(0,4,1)],is_header=False, is_csv =False)
 
-#     return X, Y
+    train, test = spliting(data, num_of_input=4, num_of_classes=3,label_col=4,is_first_label =False, is_string_columns=True)
+    nn = NeuralNetwork([4,8,6,3],activation_function, momentum)
+    nn.train(list(train),epochs,batch_size,lr)
+    nn.test(list(test),batch_size)
+   
+    
+    
 
-# def train_val_split(X, Y, train_percent=0.8):
+def test2():
+    data = load_csv("./data/wine.data",[0,13],[*range(1,13,1)],is_header=False, is_csv =False)
 
-#     '''
-#         Function takes in the training data as input and returns
-#         a training validation split based on a given percentage.
-#     '''
+    train, test = spliting(data, num_of_input=13, num_of_classes=3,label_col=0, is_first_label =True)
+    nn = NeuralNetwork([13,20,10,3],activation_function='tanh')
+    nn.train(list(train),200,4,0.0085)
 
-#     num_points = X.shape[0]
+def run_from_app(data_num,layers,args):
+    path = str({
+        1:'./data/winequality-red.csv',
+        2:'./data/iris.data' 
+    }.get(data_num))
 
-#     train_size = int(num_points * 100 * train_percent // 100)
+    if data_num == 1:
+        data = load_csv('./data/winequality-red.csv',[11],[*range(0,11,1)],is_header=True, is_csv =True)
+        train, test = spliting(data, num_of_input=11, num_of_classes=11,label_col=11, is_first_label =False)
+    else:
+        data = load_csv('./data/iris.data' ,[],[*range(0,4,1)],is_header=False, is_csv =False)
+        train, test = spliting(data, num_of_input=4, num_of_classes=3,label_col=4,is_first_label =False, is_string_columns=True)
 
-#     inds = np.arange(num_points)
-#     np.random.shuffle(inds)
+    nn = NeuralNetwork(layers,args["activation_function"],args["momentum"])
+    nn.train(list(train),epochs=args['epochs'],batch_size=args['batch_size'], learning_rate = args["learning_rate"])
+    nn.test(list(test),batch_size=args['batch_size'])
 
-#     train_inds = inds[:train_size]
-#     val_inds = inds[train_size: ]
+def test5(epochs=100,batch_size=4,lr=0.01,activation_function='tanh', momentum=0.9):
+    data = load_csv("./data/iris.data",[],[*range(0,4,1)],is_header=False, is_csv =False)
 
-#     train_X = X[train_inds, :]
-#     val_X = X[val_inds, :]
+    train, test = spliting(data, num_of_input=4, num_of_classes=3,label_col=4,is_first_label =False, is_string_columns=True)
+    nn = NeuralNetwork([4,8,6,3],activation_function, momentum)
+    nn.train(list(train),epochs,batch_size,lr)
+    nn.test(list(test),batch_size)
 
-#     train_Y = Y[train_inds]
-#     val_Y = Y[val_inds]
+def change_of_learing_rate():
+    for lr in [0.1,0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+        test1(momentum=lr)
+        
+def plot_some_graphs(arg):
+    plt.figure()
+    # length of loss = num of epochs
+    plt.plot(arg["lr"],arg["losses"])
+    plt.xlabel("Learning rate")
+    plt.ylabel("Loss")
+    plt.title(f"Change of learning rate for Wine")
+    plt.show()
 
-#     return train_X, train_Y, val_X, val_Y
-
-# X, Y = parse_txt('./data/wine.data')
-# train_X, train_Y, val_X, val_Y = train_val_split(X, Y)
-# net = Network([13,5,3])
-# net.SGD(zip(train_X,train_Y), 5, 32, 0.3)
-# reading data or csv files
-data = load_csv("./data/winequality-white.csv",[11],[*range(0,11,1)],is_header=True, is_csv =True)
-
-train, test = spliting(data, num_of_input=11, num_of_classes=11,label_col=11)
-# print(list(train))
-# print([list(element) for element in zip(*train)][1])
-# print(list(train)[0])
-# random_vectors = lambda dim, cnt: [np.random.rand(dim, 1) for i in range(cnt)]
-# random_batch= list(zip(random_vectors(3, 64) , random_vectors(2, 64)))
-# print(len(random_batch))
-nn = NeuralNetwork([11,20,16,11])
-nn.train(list(train),250,8,0.0001)
-
-
-# data = load_csv("./data/wine.data",[0,13],[*range(1,13,1)])
-
-# train, test = spliting(data, num_of_input=13, num_of_classes=3)
-# # print(list(train))
-# # print([list(element) for element in zip(*train)][1])
-# # print(list(train)[0])
-# # random_vectors = lambda dim, cnt: [np.random.rand(dim, 1) for i in range(cnt)]
-# # random_batch= list(zip(random_vectors(3, 64) , random_vectors(2, 64)))
-# # print(len(random_batch))
-# nn = NeuralNetwork([13,20,10,3])
-# nn.train(list(train),200,4,0.0001)
-
-# net = Network([13,5,5,3])
-# net.SGD(train, 5, 32, 0.3,test)
-
-# my_net = Network([3, 2 ,2])
-# print("Initial Weights:")
-# print(my_net.Wₙ[0])
-# #the following generates a list of cnt vectors of length dim.
-# random_vectors = lambda dim, cnt: [np.random.rand(dim, 1) for i in range(cnt)]
-
-# print(random_vectors(3, 64)[0].shape)
-# random_batch= list(zip(random_vectors(3, 64) , random_vectors(2, 64)))
-#print(random_batch.shape)
-# my_net.gradient_descent(list(train), 3.0)
-# print("Optimized Weights:")
-# print(my_net.Wₙ[0])
