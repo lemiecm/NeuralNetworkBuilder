@@ -1,6 +1,5 @@
 
-from csv import reader
-import numpy as np
+
 import matplotlib.pylab as plt
 
 import pandas as pd
@@ -8,7 +7,6 @@ import numpy as np
 from csv import reader
 import random
 from nn import *
-from not_mine import * 
 
 
 # def spliting(dataset, num_of_input, num_of_classes):
